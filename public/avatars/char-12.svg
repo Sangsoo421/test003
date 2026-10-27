@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="새벽">
+<defs><radialGradient id="g" cx="50%" cy="40%" r="65%"><stop offset="0" stop-color="#ffcfe1"/><stop offset="1" stop-color="#f4a7b9"/></radialGradient>
+<clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+<g clip-path="url(#c)">
+<rect width="100" height="100" fill="url(#g)"/>
+<path d="M30 40 C28 22 40 17 50 17 C60 17 72 22 70 40 L74 78 L62 76 L62 44 L38 44 L38 76 L26 78 Z" fill="#06464a"/>
+<path d="M12 104 C14 80 30 70 50 70 C70 70 86 80 88 104 Z" fill="#1d3557"/>
+<rect x="44" y="58" width="12" height="14" fill="#e4c1a1"/>
+<path d="M41 71 L50 86 L59 71 Z" fill="#ecc9a9"/>
+<path d="M38 71 L50 90 M62 71 L50 90" stroke="#4a6284" stroke-width="5" stroke-linecap="round"/>
+<circle cx="31" cy="47" r="4.5" fill="#eac7a7"/><circle cx="69" cy="47" r="4.5" fill="#eac7a7"/>
+<ellipse cx="50" cy="45" rx="19" ry="21" fill="#f6d3b3"/>
+<path d="M31 44 C30 26 40 19 50 19 C60 19 70 26 69 44 C64 34 57 31 50 31 C43 31 36 34 31 44 Z" fill="#1f5f63"/>
+<circle cx="42" cy="46" r="3.6" fill="#fff"/><circle cx="58" cy="46" r="3.6" fill="#fff"/><circle cx="42.5" cy="46.5" r="2.2" fill="#1b1b24"/><circle cx="58.5" cy="46.5" r="2.2" fill="#1b1b24"/>
+<path d="M44 55 Q50 60 56 55" stroke="#5a2b2b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<rect x="31" y="34" width="38" height="5" rx="2" fill="#e63946"/><path d="M68 36 L78 32 L76 40 Z" fill="#e63946"/>
+</g>
+</svg>

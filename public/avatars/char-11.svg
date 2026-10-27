@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="무쇠">
+<defs><radialGradient id="g" cx="50%" cy="40%" r="65%"><stop offset="0" stop-color="#ff826f"/><stop offset="1" stop-color="#e05a47"/></radialGradient>
+<clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath></defs>
+<g clip-path="url(#c)">
+<rect width="100" height="100" fill="url(#g)"/>
+
+<path d="M12 104 C14 80 30 70 50 70 C70 70 86 80 88 104 Z" fill="#40454f"/>
+<rect x="44" y="58" width="12" height="14" fill="#965f38"/>
+<path d="M41 71 L50 86 L59 71 Z" fill="#9e6740"/>
+<path d="M38 71 L50 90 M62 71 L50 90" stroke="#6d727c" stroke-width="5" stroke-linecap="round"/>
+<circle cx="31" cy="47" r="4.5" fill="#9c653e"/><circle cx="69" cy="47" r="4.5" fill="#9c653e"/>
+<ellipse cx="50" cy="45" rx="19" ry="21" fill="#a8714a"/>
+<path d="M31 44 C30 26 40 19 50 19 C60 19 70 26 69 44 C64 34 57 31 50 31 C43 31 36 34 31 44 Z" fill="#1f1d29"/>
+<path d="M37 40 L46 43" stroke="#1b1b24" stroke-width="2.6" stroke-linecap="round"/><path d="M63 40 L54 43" stroke="#1b1b24" stroke-width="2.6" stroke-linecap="round"/><circle cx="42" cy="47" r="2.4" fill="#1b1b24"/><circle cx="58" cy="47" r="2.4" fill="#1b1b24"/>
+<path d="M45 57 L55 57" stroke="#5a2b2b" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M58 38 L63 50" stroke="#b5655a" stroke-width="1.6" stroke-linecap="round"/>
+</g>
+</svg>

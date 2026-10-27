@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1226">
+  <title>드래곤볼 게임</title>
+  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="sr-only">드래곤볼 게임</h1>
+    <span id="topbar-code" class="topbar-code"></span>
+    <div class="topbar-actions">
+      <button type="button" id="btn-music" class="btn btn-ghost btn-small" aria-pressed="true">
+        <span class="icon" aria-hidden="true">🔊</span><span class="label">음악 켜짐</span>
+      </button>
+      <button type="button" id="btn-rules" class="btn btn-ghost btn-small">
+        <span class="icon" aria-hidden="true">📖</span><span>룰</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- F-22: 게임 중 모든 참가자의 상태창 -->
+  <section id="status-panel" class="status-panel" aria-label="참가자 상태" hidden>
+    <ul id="status-list" class="status-list" tabindex="0" aria-label="참가자 목록 (옆으로 넘겨 보기)"></ul>
+  </section>
+
+  <p id="toast" class="toast" role="status" aria-live="polite"></p>
+
+  <main id="app">
+    <!-- S-01 시작 -->
+    <section id="screen-start" class="screen screen-start" aria-labelledby="start-title">
+      <div class="hero">
+        <div class="ki-orb" aria-hidden="true"><span>氣</span></div>
+        <h2 id="start-title" class="game-title" tabindex="-1">드래곤볼 게임</h2>
+        <p class="tagline">아·막·파! 친구들과 각자 휴대폰으로 즐기는 기 모으기 배틀</p>
+      </div>
+      <button type="button" id="btn-create" class="btn btn-primary btn-large">방 만들기</button>
+      <form id="form-code" class="card stack" novalidate>
+        <label for="input-code">방 코드로 들어가기</label>
+        <div class="row">
+          <input id="input-code" class="input input-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="예: K7QM2X">
+          <button type="submit" class="btn btn-secondary">입장</button>
+        </div>
+      </form>
+      <p id="start-error" class="error" role="alert"></p>
+    </section>
+
+    <!-- S-02 입장 -->
+    <section id="screen-join" class="screen" aria-labelledby="join-title" hidden>
+      <h2 id="join-title" tabindex="-1">입장하기</h2>
+      <p class="muted">방 코드 <strong id="join-code" class="code-chip"></strong></p>
+      <p id="join-notice" class="notice" hidden></p>
+      <form id="form-join" class="stack" novalidate>
+        <label for="input-nickname">닉네임 (1~10자)</label>
+        <input id="input-nickname" class="input" type="text" autocomplete="nickname" maxlength="10" placeholder="예: 번개주먹">
+        <label id="host-only-option" class="check-option" hidden>
+          <input id="input-host-only" type="checkbox">
+          <span><strong>진행만 하기</strong><span class="hint">게임에는 참가하지 않고 시작·결과 확인·다음 라운드만 진행해요.</span></span>
+        </label>
+        <fieldset id="avatar-fieldset" class="avatar-fieldset">
+          <legend>캐릭터 선택</legend>
+          <div class="legend-row">
+            <button type="button" id="btn-random" class="btn btn-secondary btn-small">🎲 랜덤</button>
+          </div>
+          <div id="avatar-grid" class="avatar-grid"></div>
+        </fieldset>
+        <p id="join-error" class="error" role="alert"></p>
+        <div class="sticky-actions">
+          <button type="submit" id="btn-join" class="btn btn-primary btn-large">입장</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- S-03 룰 안내 (F-09) -->
+    <section id="screen-rules" class="screen" aria-labelledby="rules-title" hidden>
+      <h2 id="rules-title" tabindex="-1">룰 안내</h2>
+      <ul class="rule-basics card">
+        <li>모두 <strong>기 1개</strong>를 가지고 시작해요.</li>
+        <li>매 라운드 모두 <strong>동시에</strong> 기술 1개를 고르고, 호스트가 결과 확인을 누르면 한꺼번에 공개돼요.</li>
+        <li>'아'로 모은 기는 판정 <strong>후에</strong> 생겨서 같은 라운드에는 못 써요.</li>
+        <li>마지막 1명이 남으면 <strong>승리</strong>! 모두 동시에 아웃되면 무승부.</li>
+      </ul>
+
+      <h3>기술 6가지</h3>
+      <div class="skill-cards">
+        <article class="skill-card" data-skill="아">
+          <h4><span class="skill-icon" aria-hidden="true">🔆</span> 아 <span class="cost">기 +1</span></h4>
+          <p>기를 1개 모아요.</p>
+          <p class="defends">막는 것: 없음 ('파'·'에'에 맞으면 아웃)</p>
+        </article>
+        <article class="skill-card" data-skill="막">
+          <h4><span class="skill-icon" aria-hidden="true">🛡️</span> 막 <span class="cost">기 0</span></h4>
+          <p>방어 자세를 취해요.</p>
+          <p class="defends">막는 것: '파'</p>
+        </article>
+        <article class="skill-card" data-skill="파">
+          <h4><span class="skill-icon" aria-hidden="true">💥</span> 파 <span class="cost">기 1 · 1명</span></h4>
+          <p>대상을 공격해요.</p>
+          <p class="defends">막는 것: 나를 겨눈 '파' (상쇄)</p>
+        </article>
+        <article class="skill-card" data-skill="에">
+          <h4><span class="skill-icon" aria-hidden="true">🔥</span> 에 <span class="cost">기 3 · 1명</span></h4>
+          <p>강한 공격. '막'과 '파'로는 못 막아요.</p>
+          <p class="defends">막는 것: 나를 겨눈 '파'·'에'</p>
+        </article>
+        <article class="skill-card" data-skill="순">
+          <h4><span class="skill-icon" aria-hidden="true">💨</span> 순 <span class="cost">기 1</span></h4>
+          <p>순간이동. 단, '순파'에 맞으면 아웃!</p>
+          <p class="defends">피하는 것: '파', '에'</p>
+        </article>
+        <article class="skill-card" data-skill="순파">
+          <h4><span class="skill-icon" aria-hidden="true">🌀</span> 순파 <span class="cost">기 2 · 1명</span></h4>
+          <p>순간이동 공격. '순'을 쓴 대상만 아웃시켜요.</p>
+          <p class="defends">피하는 것: '파', '에', '순파'</p>
+        </article>
+      </div>
+
+      <h3>상성표</h3>
+      <div class="table-wrap">
+        <table class="rule-table">
+          <caption>공격받은 사람이 살아남는 경우</caption>
+          <thead>
+            <tr><th scope="col">공격</th><th scope="col">살아남으려면</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">💥 파</th><td>막, 순, 순파 / 또는 공격한 사람을 겨눈 파·에</td></tr>
+            <tr><th scope="row">🔥 에</th><td>순, 순파 / 또는 공격한 사람을 겨눈 에</td></tr>
+            <tr><th scope="row">🌀 순파</th><td>순이 아닌 기술이면 모두 안전</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">'파'끼리, '에'끼리는 <strong>서로를 겨눈 경우에만</strong> 상쇄돼요. 여러 명에게 공격받으면 하나라도 못 막을 때 아웃!</p>
+
+      <h3>예시</h3>
+      <ol class="rule-examples">
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="파">💥 파</span></span>
+            <span class="ex-arrow" aria-hidden="true">→</span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="아">🔆 아</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">B 아웃</span> '아'는 방어가 없어요.</p>
+        </li>
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="파">💥 파</span></span>
+            <span class="ex-arrow" aria-hidden="true">→</span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="파">💥 파→C</span></span>
+            <span class="ex-player">C<span class="ex-skill" data-skill="막">🛡️ 막</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">B 아웃</span> B는 A를 겨누지 않아서 못 막아요.</p>
+        </li>
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="에">🔥 에</span></span>
+            <span class="ex-arrow" aria-hidden="true">⇄</span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="파">💥 파</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">B 아웃</span> <span class="tag tag-safe">A 생존</span> '에'가 '파'를 이겨요.</p>
+        </li>
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="순파">🌀 순파</span></span>
+            <span class="ex-arrow" aria-hidden="true">→</span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="순">💨 순</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">B 아웃</span> B가 '아'·'막'이었다면 아무 일도 없어요.</p>
+        </li>
+      </ol>
+      <div class="sticky-actions">
+        <button type="button" id="btn-rules-close" class="btn btn-primary btn-large">닫기</button>
+      </div>
+    </section>
+
+    <!-- S-04 대기실 -->
+    <section id="screen-lobby" class="screen" aria-labelledby="lobby-title" hidden>
+      <h2 id="lobby-title" tabindex="-1">대기실</h2>
+      <p class="muted">방 코드 <strong id="lobby-code" class="code-chip"></strong> · <span id="lobby-count"></span></p>
+      <ul id="lobby-players" class="lobby-players"></ul>
+      <div class="host-only stack" hidden>
+        <div class="card stack share-card">
+          <label for="share-link">친구 초대 링크</label>
+          <div class="row">
+            <input id="share-link" class="input" type="text" readonly>
+            <button type="button" id="btn-copy" class="btn btn-secondary">링크 복사</button>
+          </div>
+          <p id="copy-status" class="hint" role="status"></p>
+          <img id="qr-image" class="qr" alt="초대 링크 QR 코드. 휴대폰 카메라로 찍으면 입장할 수 있어요." width="168" height="168">
+        </div>
+        <div class="sticky-actions">
+          <button type="button" id="btn-start" class="btn btn-primary btn-large">드래곤볼 게임 시작</button>
+          <p id="start-hint" class="hint"></p>
+        </div>
+      </div>
+      <p class="guest-only waiting"><span class="dots" aria-hidden="true"></span>호스트가 게임을 시작하기를 기다리는 중…</p>
+    </section>
+
+    <!-- S-05 라운드 선택 -->
+    <section id="screen-round" class="screen" aria-labelledby="round-title" hidden>
+      <div class="round-head">
+        <h2 id="round-title" tabindex="-1">라운드</h2>
+        <p class="my-ki" aria-label="내 기 개수"><span class="ki-dot" aria-hidden="true"></span>내 기 <strong id="my-ki">0</strong>개</p>
+      </div>
+
+      <p id="out-notice" class="notice notice-out" hidden><strong>아웃되었습니다.</strong> 남은 사람들의 대결을 관전해요.</p>
+      <p id="spectator-notice" class="notice" hidden><strong>관전 중</strong> 게임이 진행 중이라 다음 게임부터 참가해요.</p>
+      <p id="host-only-notice" class="notice" hidden><strong>🎙️ 진행 중</strong> 모두 선택하면 결과 확인을 눌러 주세요.</p>
+
+      <div id="choice-area" class="stack" hidden>
+        <fieldset>
+          <legend>기술 고르기</legend>
+          <div id="skill-buttons" class="skill-buttons"></div>
+        </fieldset>
+        <fieldset id="target-area" hidden>
+          <legend>공격할 대상</legend>
+          <div id="target-buttons" class="target-buttons"></div>
+        </fieldset>
+        <p id="choice-summary" class="choice-summary" aria-live="polite"></p>
+        <div class="sticky-actions">
+          <button type="button" id="btn-decide" class="btn btn-primary btn-large">결정</button>
+          <button type="button" id="btn-change" class="btn btn-secondary btn-large" hidden>선택 바꾸기</button>
+        </div>
+      </div>
+
+      <div class="host-only card stack host-panel" hidden>
+        <p class="host-panel-title">👑 호스트</p>
+        <p id="submit-progress" class="hint"></p>
+        <button type="button" id="btn-reveal" class="btn btn-primary">결과 확인</button>
+        <button type="button" id="btn-force" class="btn btn-danger" hidden>강제 진행</button>
+      </div>
+    </section>
+
+    <!-- S-06 결과 공개 -->
+    <section id="screen-reveal" class="screen" aria-labelledby="reveal-title" hidden>
+      <h2 id="reveal-title" tabindex="-1">결과 공개</h2>
+      <div class="arena" id="arena">
+        <div id="arena-cards" class="arena-cards"></div>
+        <div id="arena-fx" class="arena-fx" aria-hidden="true"></div>
+        <div id="reveal-stage" class="reveal-stage" aria-hidden="true"></div>
+      </div>
+      <p id="reveal-caption" class="reveal-caption" aria-live="polite"></p>
+      <div id="reveal-summary" class="card stack" hidden>
+        <h3>라운드 요약</h3>
+        <ul id="summary-list" class="summary-list"></ul>
+        <p id="summary-out" class="summary-out"></p>
+      </div>
+      <div class="sticky-actions">
+        <button type="button" id="btn-next" class="btn btn-primary btn-large host-only" hidden>다음 라운드</button>
+      </div>
+      <p id="next-wait" class="hint guest-only waiting" hidden><span class="dots" aria-hidden="true"></span>호스트가 다음으로 넘어가기를 기다리는 중…</p>
+    </section>
+
+    <!-- S-07 게임 종료 -->
+    <section id="screen-end" class="screen" aria-labelledby="end-title" hidden>
+      <div id="confetti" class="confetti" aria-hidden="true"></div>
+      <h2 id="end-title" class="end-title" tabindex="-1">게임 종료</h2>
+      <div id="end-winner" class="end-winner"></div>
+      <div class="card">
+        <h3>순위</h3>
+        <ol id="ranking-list" class="ranking-list"></ol>
+      </div>
+      <div class="host-only stack sticky-actions" hidden>
+        <button type="button" id="btn-new-game" class="btn btn-primary btn-large">새 게임 시작</button>
+        <button type="button" id="btn-to-lobby" class="btn btn-secondary">대기실로</button>
+      </div>
+      <p class="guest-only waiting"><span class="dots" aria-hidden="true"></span>호스트가 새 게임을 시작하기를 기다리는 중…</p>
+    </section>
+
+    <!-- 같은 플레이어가 다른 탭에서 접속했을 때 -->
+    <section id="screen-notice" class="screen" aria-labelledby="notice-title" hidden>
+      <h2 id="notice-title" tabindex="-1">다른 곳에서 접속했습니다</h2>
+      <p>같은 기기의 다른 탭(또는 창)에서 이 방에 접속해서, 이 탭의 연결을 끊었어요.</p>
+      <button type="button" id="btn-reopen" class="btn btn-primary btn-large">이 탭에서 다시 열기</button>
+    </section>
+  </main>
+
+  <!-- F-17: 강제 진행 확인 창. 실수로 누르지 않게 '취소'에 먼저 포커스 -->
+  <dialog id="force-dialog" class="dialog" aria-labelledby="force-title">
+    <h2 id="force-title">강제 진행할까요?</h2>
+    <p id="force-message"></p>
+    <div class="dialog-actions">
+      <button type="button" id="force-cancel" class="btn btn-secondary" autofocus>취소</button>
+      <button type="button" id="force-confirm" class="btn btn-danger">강제 진행</button>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/avatar-data.js"></script>
+  <script src="/audio.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

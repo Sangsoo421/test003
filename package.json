@@ -1,0 +1,25 @@
+{
+  "name": "dragonball-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "드래곤볼(아·막·파) 실시간 멀티플레이 모바일 웹 게임",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pretendard": "^1.3.9",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.48.2",
+    "jsqr": "^1.4.0"
+  }
+}

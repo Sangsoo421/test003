@@ -1,0 +1,13 @@
+# Render(https://render.com) 배포 설정. 대시보드에서 New → Blueprint로 이 저장소를 고르면 자동으로 만들어진다.
+# 방 정보는 서버 메모리에 있으므로 인스턴스는 반드시 1개로 둔다.
+services:
+  - type: web
+    name: dragonball-game
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
