@@ -16,6 +16,8 @@ const SKILLS = [
   { name: '원', icon: '🌕', cost: 5, attack: false, ultimate: true, effect: '원기옥! 나 빼고 전원 아웃' },
 ];
 const ULTIMATE = '원';
+// '막'은 연속 2번까지만 (server/judge.js MAK_LIMIT과 같은 값, 검증은 서버가 한다)
+const MAK_LIMIT = 2;
 const SKILL_BY_NAME = Object.fromEntries(SKILLS.map((s) => [s.name, s]));
 
 const OUTCOME_TEXT = {
@@ -467,7 +469,14 @@ function displayedPlayers(room) {
     if (!action) return p;
     const skill = SKILL_BY_NAME[action.skill];
     const kiBefore = p.ki + skill.cost - (action.skill === '아' ? 1 : 0);
-    return { ...p, ki: kiBefore, alive: phase === 'outs' ? p.alive : true };
+    // 연속 '막' 횟수가 바뀌면 누가 막을 썼는지 미리 드러나므로 판정 전 값을 보여준다.
+    const before = result.makStreakBefore ? result.makStreakBefore[p.id] : undefined;
+    return {
+      ...p,
+      ki: kiBefore,
+      makStreak: before === undefined ? p.makStreak : before,
+      alive: phase === 'outs' ? p.alive : true,
+    };
   });
 }
 
@@ -493,6 +502,9 @@ function renderStatusPanel(room) {
     } else {
       const status = [];
       status.push(createBadge(`기 ${p.ki}`, 'badge-ki'));
+      // 연속 '막' 횟수 (심리전용 공개 정보)
+      if (p.alive && p.makStreak >= MAK_LIMIT) status.push(createBadge('🚫🛡️ 막기불가', 'badge-nomak'));
+      else if (p.alive && p.makStreak > 0) status.push(createBadge(`🛡️ 막 ${p.makStreak}회 연속`, 'badge-mak'));
       if (!p.alive) {
         status.push(createBadge('OUT', 'badge-out'));
       } else if (room.status === 'choosing') {
@@ -544,12 +556,17 @@ function renderChoice(room, self) {
     btn.className = s.ultimate ? 'skill-btn skill-btn-ultimate' : 'skill-btn';
     btn.dataset.skill = s.name;
     const lacking = self.ki < s.cost;
-    if (lacking) btn.classList.add('is-lacking');
-    btn.disabled = lacking || decided;
+    const makBlocked = s.name === '막' && (self.makStreak || 0) >= MAK_LIMIT;
+    if (lacking || makBlocked) btn.classList.add('is-lacking');
+    btn.disabled = lacking || makBlocked || decided;
     btn.setAttribute('aria-pressed', String(pick.skill === s.name));
     btn.appendChild(el('span', s.icon, 'skill-icon')).setAttribute('aria-hidden', 'true');
     btn.appendChild(el('span', s.name, 'skill-name'));
-    btn.appendChild(el('span', lacking ? `🔒 기 ${s.cost}개 필요` : `기 ${s.cost} · ${s.effect}`, 'skill-cost'));
+    let note = `기 ${s.cost} · ${s.effect}`;
+    if (makBlocked) note = `🔒 연속 ${MAK_LIMIT}회 사용 (이번 턴 불가)`;
+    else if (lacking) note = `🔒 기 ${s.cost}개 필요`;
+    else if (s.name === '막' && self.makStreak === 1) note = '기 0 · 쓰면 다음 턴 막 불가';
+    btn.appendChild(el('span', note, 'skill-cost'));
     btn.addEventListener('click', () => {
       state.pick = { round: room.round, skill: s.name, targetId: s.attack ? pick.targetId : null };
       renderRound(state.room);

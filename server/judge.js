@@ -17,6 +17,23 @@ const SKILLS = Object.freeze(Object.assign(Object.create(null), {
 // 선택하지 않은 참가자는 '막'으로 처리한다 (F-17).
 const DEFAULT_SKILL = '막';
 
+// '막'은 연속 2번까지만 쓸 수 있다. 직전 2라운드 연속 '막'이면 이번 라운드에는 고를 수 없다.
+const MAK_LIMIT = 2;
+
+function safeStreak(streak) {
+  return Number.isSafeInteger(streak) && streak >= 0 ? streak : 0;
+}
+
+// 이번 라운드에 쓴 기술로 다음 연속 '막' 횟수를 구한다. '막'이면 1 늘리고(상한 MAK_LIMIT), 다른 기술이면 0.
+// 상한을 두는 이유: 강제 진행(F-17)은 연속 2회인 사람도 예외로 '막' 처리하는데, 그래도 다음 라운드는 계속 막을 못 쓰게 한다.
+function nextMakStreak(streak, skill) {
+  return skill === '막' ? Math.min(MAK_LIMIT, safeStreak(streak) + 1) : 0;
+}
+
+function makBlocked(player) {
+  return safeStreak(player && player.makStreak) >= MAK_LIMIT;
+}
+
 const MAX_SKILL_NAME = 8;
 const MAX_ID_LENGTH = 64;
 
@@ -74,11 +91,14 @@ function resolveAttack(attackerId, skill, defense) {
 }
 
 // 선택 하나가 규칙에 맞는지 확인한다. 맞으면 null, 아니면 이유를 돌려준다.
-// player: { id, ki }, alivePlayers: 이번 라운드 생존자 목록
+// player: { id, ki, makStreak }, alivePlayers: 이번 라운드 생존자 목록
 function validateAction(player, rawAction, alivePlayers) {
   const { action, error } = parseAction(rawAction);
   if (error) return error;
   const skill = SKILLS[action.skill];
+  if (action.skill === '막' && makBlocked(player)) {
+    return `'막'은 연속 ${MAK_LIMIT}번까지만 쓸 수 있어요. 이번 라운드에는 다른 기술을 골라 주세요.`;
+  }
   if (safeKi(player.ki) < skill.cost) return `기가 모자랍니다. (${action.skill}: 기 ${skill.cost}개 필요)`;
   const targetId = action.targetId;
   if (!skill.attack) {
@@ -141,4 +161,16 @@ function judge(players, actions) {
   };
 }
 
-module.exports = { SKILLS, DEFAULT_SKILL, judge, validateAction, resolveAttack, parseSkill, parseAction, safeKi };
+module.exports = {
+  SKILLS,
+  DEFAULT_SKILL,
+  MAK_LIMIT,
+  judge,
+  validateAction,
+  resolveAttack,
+  parseSkill,
+  parseAction,
+  safeKi,
+  nextMakStreak,
+  makBlocked,
+};

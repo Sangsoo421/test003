@@ -319,3 +319,30 @@ test('원기옥: 판정에 넘어온 대상은 무시', () => {
   assert.equal(r.actions[0].targetId, null);
   assert.deepEqual(r.eliminated, ['B']);
 });
+
+// ---------- '막' 연속 2회 제한 ----------
+const { nextMakStreak, makBlocked, MAK_LIMIT } = require('../server/judge');
+
+test('막 연속 제한: 직전 2라운드 연속 막이면 이번 라운드 막 거부, 1회면 허용', () => {
+  assert.equal(MAK_LIMIT, 2);
+  assert.equal(validateAction({ id: 'A', ki: 1, makStreak: 0 }, { skill: '막' }, alive), null);
+  assert.equal(validateAction({ id: 'A', ki: 1, makStreak: 1 }, { skill: '막' }, alive), null);
+  assert.match(validateAction({ id: 'A', ki: 1, makStreak: 2 }, { skill: '막' }, alive), /연속 2번/);
+  // 막 말고 다른 기술은 그대로 고를 수 있다
+  assert.equal(validateAction({ id: 'A', ki: 1, makStreak: 2 }, { skill: '아' }, alive), null);
+  assert.equal(validateAction({ id: 'A', ki: 1, makStreak: 2 }, { skill: '파', targetId: 'B' }, alive), null);
+  // 공백·NFD로 감싼 '막'도 같은 기술로 본다
+  assert.ok(validateAction({ id: 'A', ki: 1, makStreak: 2 }, { skill: ' 막 '.normalize('NFD') }, alive));
+});
+
+test('막 연속 횟수: 막이면 +1(상한 2), 다른 기술이면 0, 깨진 값은 0으로', () => {
+  assert.equal(nextMakStreak(0, '막'), 1);
+  assert.equal(nextMakStreak(1, '막'), 2);
+  assert.equal(nextMakStreak(2, '막'), 2); // 강제 진행 예외로 3번째 막이 되어도 2에 머문다
+  for (const s of ['아', '파', '에', '순', '순파', '원']) assert.equal(nextMakStreak(2, s), 0, s);
+  for (const bad of [NaN, -1, 1.5, '2', undefined, null]) {
+    assert.equal(nextMakStreak(bad, '막'), 1, String(bad));
+    assert.equal(makBlocked({ makStreak: bad }), false, String(bad));
+  }
+  assert.equal(makBlocked({ makStreak: 2 }), true);
+});

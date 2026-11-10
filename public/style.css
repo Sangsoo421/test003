@@ -916,6 +916,18 @@ legend {
   color: var(--accent);
 }
 
+/* 연속 '막' 횟수 (아이콘·글자로 구분) */
+.badge-mak {
+  background: rgb(92 200 255 / 15%);
+  color: var(--skill-mak);
+}
+
+.badge-nomak {
+  background: transparent;
+  border: 1px solid var(--skill-mak);
+  color: var(--skill-mak);
+}
+
 .share-card .qr {
   align-self: center;
   width: 168px;
@@ -1087,6 +1099,8 @@ legend {
 .skill-btn .skill-cost {
   font-size: var(--fs-xs);
   color: var(--text-muted);
+  text-align: center;
+  word-break: keep-all; /* 한국어를 단어 중간에서 줄바꿈하지 않음 */
 }
 
 .skill-btn[aria-pressed="true"] {

@@ -126,6 +126,7 @@ function addPlayer(room, { secret, nickname, avatarId, playing = true, id = newP
     avatarId: playing ? avatarId : null,
     playing: Boolean(playing), // false: 진행만 하는 호스트 (게임에 참가하지 않음)
     ki: 0,
+    makStreak: 0, // 연속으로 '막'을 쓴 횟수 (공개 정보, 2면 이번 라운드 '막' 불가)
     alive: true,
     connected: true,
     submitted: false,
@@ -168,6 +169,7 @@ function publicState(room, viewerId, extra = {}) {
       avatarId: p.avatarId,
       playing: p.playing,
       ki: p.ki,
+      makStreak: p.makStreak || 0,
       alive: p.alive,
       connected: p.connected,
       submitted: p.submitted,

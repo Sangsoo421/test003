@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A real-time multiplayer mobile web version of the "드래곤볼(아·막·파)" hand game. Friends in the same room each open a link on their phone, and the server reveals and judges everyone's moves at the same time. All user-facing text and docs are in Korean.
 
-- `prd.md` (v0.2) is the source of truth: game rules in §3, requirements F-01 to F-37, screens S-01 to S-07, and decisions in §10.
+- `prd.md` (v0.3) is the source of truth: game rules in §3, requirements F-01 to F-37, screens S-01 to S-07, and decisions in §10.
 - `prompts.md` is the staged build plan (1 skeleton, 2 game rules, 3 UI design, 4 Playwright review, and an optional 5 for fixes). Its "공통 전제" section records decisions that override or clarify the PRD.
 - Current state:
   - **Stages 1–3 are done.**
   - **Stage 4 (Playwright review) is in progress.** The E2E suite is in `tests/e2e/`, and the report (`review-report.md`) has not been written yet.
   - Two serious bugs found in the review are already fixed: the leak of other players' choices, and skill-name validation (see "Player identity" and `judge.js` below). The rest are listed under "Known open issues".
   - **Added after stage 4 (PRD v0.2, branch `v2`):** the '원' (원기옥) ultimate skill with its own reveal effect, and chat shown as speech bubbles next to each sender's character (F-34 to F-37).
+  - **Added in PRD v0.3 (branch `v3`):** '막' can be used at most twice in a row (see "'막' streak limit" below).
 
 **This is not the quiz game.** The parent folder's `CLAUDE.md` is about the quiz game, which is built differently: no server, runs from `file://`, a `QUESTIONS` data file, and quiz-content guidelines. None of that applies here, and neither do the quiz `/quiz-*` commands.
 
@@ -44,7 +45,9 @@ Server code has three layers. Keep the first two free of sockets and timers so t
   - Inside `judge()`, an unknown skill falls back to '막' (cost 0).
   - **'원' (원기옥, added after the PRD):** cost 5, no target (`ultimate: true`, `attack: false`). It eliminates every other alive player, whatever they chose. A '파', '에' or '순파' aimed at a '원' user gets outcome `absorbed`, so the user survives. Two or more '원' users eliminate each other and everyone else, so the round is a draw. `judge()` adds one `{ skill: '원', outcome: 'hit' }` attack per caster per victim.
   - `safeKi()` treats a corrupt ki value as 0.
+  - **'막' streak limit (v0.3):** `MAK_LIMIT` is 2. `validateAction()` rejects '막' when `makBlocked(player)` (`player.makStreak >= 2`). `nextMakStreak(streak, skill)` returns +1 for '막' (capped at 2) and 0 for any other skill; a corrupt streak counts as 0.
 - **`server/game.js`:** round flow (start, submit and cancel, reveal or force, next round, back to lobby, ranking). It changes the room object and returns `{ ok }` or `{ error }`. It stores only the normalized action, never the raw request.
+  - `reveal()` updates each alive player's `makStreak` from the skill they actually used (forced players count as '막'), and puts the pre-reveal values in `lastResult.makStreakBefore`. `startGame()` resets `makStreak` to 0.
 - **`server/rooms.js`:** the room registry, joining (nickname, avatar, and 8-player checks), host transfer, and `publicState()`.
 - **`server/chat.js`:** participant chat (speech bubbles). `addMessage()` cleans the text (NFC, removes control and zero-width characters, collapses whitespace), allows 1–100 characters and 5 messages per 5 s per player, and numbers it with `room.chatSeq`. Messages are not stored. Per-player send times live in `player.chatTimes`, which `publicState()` never copies.
 - **`server/index.js`:** Socket.IO wiring plus timers (leave grace, room cleanup) and the `/qr/:code` SVG endpoint.
@@ -74,7 +77,7 @@ How the pieces fit:
 - **Reveal sync (F-18, F-19):** the reveal timing comes from the server.
   - The server sends `revealMs` and `revealElapsedMs`. The client plays `REVEAL_PHASES` (count3/2/1, skills, attacks, impact, outs) from that offset, keyed by `lastResult.revealedAt`, so a broadcast never replays the reveal and a page reloaded mid-reveal resumes where it was.
   - `round:next` is refused until `revealMs` has passed.
-  - During the animation, `displayedPlayers()` shows the ki and alive state from before the reveal, so the status bar can't spoil the result.
+  - During the animation, `displayedPlayers()` shows the ki, '막' streak (`lastResult.makStreakBefore`) and alive state from before the reveal, so the status bar can't spoil the result.
   - `renderArena()` is derived from the current phase alone and is rebuilt on every render. The flying effects from `launchProjectiles()` live in a separate `#arena-fx` layer and fire only when a phase is entered live. With `prefers-reduced-motion`, the flying effects are skipped, but every label and the caption still appear.
   - **원기옥 effect:** `chargeGenki()` grows a `.genki-orb` above the caster when the skills phase starts; `launchGenki()` (called from `launchProjectiles()`) drops it onto the arena centre and ends in `genkiBlast()` (flash and shock rings). `renderReveal()` toggles `.is-genki` / `.is-genki-impact` on `#arena` and shows `.genki-banner` during the attacks phase, all derived from the phase. Sounds: `genkiCharge`, `genkiLaunch`, `genkiBoom` in `audio.js`.
 - **Shared links and the QR code use `shareOrigin(headers)`** in `index.js`, never `localhost`, so other devices can open them:
@@ -85,7 +88,7 @@ How the pieces fit:
 - **Deploying to the internet:** `render.yaml` (Render Blueprint) runs `npm ci --omit=dev` and `node server/index.js`, with `/healthz` as the health check. Rooms live in memory, so run exactly one instance; a restart drops every room. `MAX_ROOMS` (default 500) caps room creation, and Socket.IO's `maxHttpBufferSize` is 16 KB.
 - **Features that need a secure context:** phones reach the server over plain `http://<LAN IP>`, which is not a secure context. Don't use `crypto.randomUUID` or rely on `navigator.clipboard`; use `getRandomValues` and the `execCommand('copy')` fallback, as `app.js` already does.
 - **Absolute asset paths:** `public/index.html` loads `/style.css`, `/avatar-data.js`, `/audio.js` and `/app.js` by absolute path, because the same page is also served at `/room/:code`.
-- **`SKILLS` is defined twice,** in `server/judge.js` and in `public/app.js`, which uses it for display only. Change both together. Both mark '원' with `ultimate: true`; on the client that makes it a full-width gold button (`.skill-btn-ultimate`) and hides the target picker.
+- **`SKILLS` and `MAK_LIMIT` are defined twice,** in `server/judge.js` and in `public/app.js`, which uses them for display only. Change both together. Both mark '원' with `ultimate: true`; on the client that makes it a full-width gold button (`.skill-btn-ultimate`) and hides the target picker.
 - **Avatars:** `scripts/generate-avatars.js` generates `public/avatars/char-XX.svg` and `public/avatar-data.js` (the global `AVATARS`, with names). Don't edit the output; change the script and rerun it. Keep the characters original: no spiky hair and no orange gi.
 - **Music (`public/audio.js`, global `Sound`):** all sound is synthesized with the Web Audio API, with no audio files. The `AudioContext` is created on the first `pointerdown` or `keydown` (F-33). `STATUS_TRACK` in `app.js` picks the track for each room status. The on/off setting is stored in `localStorage` as `dbg.music`. Sound effects are in `SFX`; '원' uses `genkiCharge`, `genkiLaunch` and `genkiBoom` instead of the usual attack sounds.
 - **Font:** the server serves the Pretendard font from `node_modules/pretendard` at `/fonts/pretendard`, so it works on a Wi-Fi network with no internet. Record any new asset in `CREDITS.md`.
@@ -97,6 +100,7 @@ How the pieces fit:
 - **Judging happens only on the server, and the server trusts no client request.** It rejects:
   - unknown or non-string skill names;
   - skills the player lacks ki for (including '원' below 5 ki);
+  - a third '막' in a row (`makStreak` is 2);
   - a target sent with a skill that takes none ('아', '막', '순', '원');
   - attacks on yourself or on an eliminated player, and targets that aren't strings;
   - actions from eliminated players or spectators;
@@ -114,6 +118,8 @@ How the pieces fit:
   - Attacks are simultaneous: an attacker eliminated in the same round still lands their attack.
   - If everyone left is eliminated in the same round, the game is a draw.
   - '원' cannot be blocked or dodged, absorbs attacks aimed at its user, and two '원' in one round means everyone is out (draw).
+  - '막' at most twice in a row. Using any other skill or starting a new game resets the streak. The streak is public (`publicState()` sends `makStreak`); the status bar shows "🛡️ 막 1회 연속" or "🚫🛡️ 막기불가", and the locked button says "연속 2회 사용 (이번 턴 불가)".
+  - Forced progress (F-17) is the exception: an unsubmitted player is judged as '막' even with a streak of 2, with no error, and the streak stays at 2. Don't "fix" this by validating forced actions.
 - **PRD conflicts already resolved:**
   - F-17 (the host can force progress, and anyone who has not chosen counts as '막') overrides §10 #6.
   - Room codes are at least 6 characters, generated with `crypto`, and avoid look-alike characters such as 0/O and 1/I/L. The PRD's `AB12` is only an example.
@@ -141,6 +147,7 @@ Each one has a failing E2E test, and the name of each test says what correct beh
   - Rules: every example in §3.4 (including '원' examples 13–15), the full attack × defense table, ki math, the '원' cases, and skill-name and ki hardening (`__proto__`, NaN ki).
   - Round flow in `game.js`, plus the check that secrets never appear in `publicState()`.
   - Chat validation and rate limiting in `chat.js` (in `tests/game.test.js`).
+  - The '막' streak: `nextMakStreak()`/`validateAction()` in `judge.test.js`, and round-by-round counting, reset, forced-progress exception and `makStreakBefore` in `game.test.js`.
   - Add a judge test for any rule change.
 - **E2E (`tests/e2e/`, Playwright):**
   - **Servers:** `playwright.config.js` starts two:
@@ -153,6 +160,7 @@ Each one has a failing E2E test, and the name of each test says what correct beh
     - Each page gets helpers: `page.pid` (the public ID), `page.choose()`, `page.emitAck()` for raw socket requests, and `page.frames_`, which records received WebSocket frames from before connect.
     - The fixture fails any test that logs a console or page error. `game.allowErrors` takes regexes, and is meant for noise the tool itself causes (for example, going offline).
   - **Screenshots:** `ui.spec.js` writes them to `screenshots/` at 360, 768 and 1440 px, and runs axe on each.
+  - **`mak-limit.spec.js`:** the locked '막' button and its message, the status-bar badge (including that it isn't spoiled during the reveal), raw-socket rejection, forced progress at a streak of 2, and the reset on a new game.
   - **`genki-chat.spec.js`:** '원' judging, its reveal effect (also with reduced motion), and the chat bubbles. The bubble test checks that a bubble sits right above or below the sender's `[data-chat-anchor]` avatar.
 - **Selector gotcha:** `data-skill` also appears on the rules screen's cards and example chips. Select skill buttons with `.skill-btn[data-skill="파"]`, and target buttons with `[data-target="<public ID>"]`.
 - **Waiting on reveal phases:** use `waitForFunction(() => state.reveal.phase === '…', null, { polling: 30 })`. The default `requestAnimationFrame` polling stalls in background pages, and `expect().toHaveText` polling can miss the 0.6-second countdown steps.

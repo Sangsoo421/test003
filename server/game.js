@@ -2,7 +2,7 @@
 
 // 게임 진행 (PRD §3.1, §3.5, F-11~F-28). 방 객체를 직접 바꾸고, 소켓·타이머는 다루지 않는다.
 // 실패하면 { error }, 성공하면 { ok: true }를 돌려준다.
-const { SKILLS, judge, validateAction, parseAction } = require('./judge');
+const { SKILLS, judge, validateAction, parseAction, nextMakStreak } = require('./judge');
 
 const MIN_PLAYERS = 2;
 const START_KI = 1;
@@ -31,6 +31,7 @@ function startGame(room) {
     p.inGame = p.playing;
     p.alive = true;
     p.ki = START_KI;
+    p.makStreak = 0; // 연속 '막' 횟수. 새 게임이면 0
     p.submitted = false;
     p.action = null;
     p.eliminatedRound = null;
@@ -113,8 +114,14 @@ function reveal(room, { force = false, now = Date.now() } = {}) {
   const actions = {};
   for (const p of alive) if (p.submitted) actions[p.id] = p.action;
   const result = judge(alive.map((p) => ({ id: p.id, ki: p.ki })), actions);
+  // 공개 연출 중 상태창이 결과를 미리 드러내지 않게, 판정 전 연속 '막' 횟수를 함께 보낸다.
+  const makStreakBefore = {};
 
   for (const p of alive) {
+    makStreakBefore[p.id] = p.makStreak || 0;
+    // 강제 진행으로 '막' 처리된 사람은 이미 연속 2회여도 예외로 허용한다 (F-17). 횟수는 상한 2에 머문다.
+    const used = result.actions.find((a) => a.playerId === p.id).skill;
+    p.makStreak = nextMakStreak(p.makStreak, used);
     p.ki = result.ki[p.id];
     p.submitted = false;
     p.action = null;
@@ -133,6 +140,7 @@ function reveal(room, { force = false, now = Date.now() } = {}) {
     attacks: result.attacks,
     eliminated: result.eliminated,
     forced,
+    makStreakBefore,
     gameOver,
     winnerId: survivors.length === 1 ? survivors[0].id : null,
     draw: survivors.length === 0,

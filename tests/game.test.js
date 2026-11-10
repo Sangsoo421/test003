@@ -380,3 +380,76 @@ test('채팅: 5초에 5개까지만 보낼 수 있음', () => {
   assert.ok(chat.addMessage(room, player, '또', 1010).error);
   assert.ok(chat.addMessage(room, player, '이제 됨', 1000 + chat.RATE_WINDOW_MS + 10).message);
 });
+
+// ---------- '막' 연속 2회 제한 (v3) ----------
+function playRound(room, choices) {
+  for (const [id, skill, target] of choices) assert.deepEqual(submit(room, id, skill, target ?? null), { ok: true }, `${id} ${skill}`);
+  assert.deepEqual(game.reveal(room), { ok: true });
+  assert.deepEqual(game.nextRound(room), { ok: true });
+}
+
+test('§3.4-16 막 연속 제한: 2라운드 연속 막 → 3라운드에 막 거부, 다른 기술 쓰면 다시 가능', () => {
+  const room = makeRoom(['A', 'B', 'C']);
+  game.startGame(room);
+  playRound(room, [['A', '막'], ['B', '아'], ['C', '아']]);
+  assert.equal(player(room, 'A').makStreak, 1);
+  playRound(room, [['A', '막'], ['B', '아'], ['C', '아']]);
+  assert.equal(player(room, 'A').makStreak, 2);
+  const res = submit(room, 'A', '막');
+  assert.match(res.error, /연속 2번/);
+  assert.equal(player(room, 'A').submitted, false);
+  playRound(room, [['A', '아'], ['B', '막'], ['C', '순']]);
+  assert.equal(player(room, 'A').makStreak, 0);
+  assert.equal(player(room, 'B').makStreak, 1);
+  assert.equal(player(room, 'C').makStreak, 0);
+  assert.deepEqual(submit(room, 'A', '막'), { ok: true });
+});
+
+test('막 연속 횟수는 공개 정보로 상태에 실리고, 공개 결과에는 판정 전 값이 함께 실림', () => {
+  const room = makeRoom(['A', 'B']);
+  game.startGame(room);
+  playRound(room, [['A', '막'], ['B', '아']]);
+  submit(room, 'A', '막');
+  submit(room, 'B', '아');
+  game.reveal(room);
+  const state = rooms.publicState(room, 'B');
+  assert.equal(state.players.find((p) => p.id === 'A').makStreak, 2);
+  assert.deepEqual(state.lastResult.makStreakBefore, { A: 1, B: 0 });
+});
+
+test('강제 진행: 이미 연속 2회 막인 사람도 에러 없이 막으로 처리되고, 횟수는 2에 머묾', () => {
+  const room = makeRoom(['A', 'B', 'C']);
+  game.startGame(room);
+  playRound(room, [['A', '막'], ['B', '아'], ['C', '아']]);
+  playRound(room, [['A', '막'], ['B', '아'], ['C', '아']]);
+  assert.equal(player(room, 'A').makStreak, 2);
+  // A는 연결이 끊겨 선택하지 못함 → 호스트가 강제 진행
+  submit(room, 'B', '파', 'A');
+  submit(room, 'C', '아');
+  assert.deepEqual(game.reveal(room, { force: true }), { ok: true });
+  assert.deepEqual(room.lastResult.forced, ['A']);
+  assert.equal(room.lastResult.actions.find((a) => a.playerId === 'A').skill, '막');
+  assert.equal(room.lastResult.attacks[0].outcome, 'blocked'); // 막으로 처리되어 파를 막는다
+  assert.equal(player(room, 'A').alive, true);
+  assert.equal(player(room, 'A').makStreak, 2);
+  game.nextRound(room);
+  assert.match(submit(room, 'A', '막').error, /연속 2번/);
+});
+
+test('막 연속 횟수는 새 게임에서 0으로', () => {
+  const room = makeRoom(['A', 'B']);
+  game.startGame(room);
+  playRound(room, [['A', '막'], ['B', '아']]);
+  playRound(room, [['A', '막'], ['B', '아']]);
+  submit(room, 'A', '아');
+  submit(room, 'B', '에', 'A'); // B 기 3 → A 아웃, 게임 끝
+  game.reveal(room);
+  game.nextRound(room);
+  assert.equal(room.status, 'finished');
+  assert.equal(player(room, 'A').makStreak, 0); // 아를 썼으므로
+  // 막 2회 상태로 끝난 경우도 새 게임에서 0
+  player(room, 'B').makStreak = 2;
+  game.startGame(room);
+  assert.equal(player(room, 'B').makStreak, 0);
+  assert.deepEqual(submit(room, 'B', '막'), { ok: true });
+});
