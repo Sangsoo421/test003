@@ -41,9 +41,11 @@ Server code has three layers. Keep the first two free of sockets and timers so t
 - **`server/judge.js`:** pure rules. `judge()` resolves one round, and `validateAction()` checks a single choice.
   - `SKILLS` is a frozen object with no prototype. Always read skill names through `parseSkill()` / `parseAction()`: they require a string, apply NFC normalization and trim, and accept only names `SKILLS` itself defines. This stops names like `__proto__` from passing.
   - Inside `judge()`, an unknown skill falls back to '막' (cost 0).
+  - **'원' (원기옥, added after the PRD):** cost 5, no target (`ultimate: true`, `attack: false`). It eliminates every other alive player, whatever they chose. A '파', '에' or '순파' aimed at a '원' user gets outcome `absorbed`, so the user survives. Two or more '원' users eliminate each other and everyone else, so the round is a draw. `judge()` adds one `{ skill: '원', outcome: 'hit' }` attack per caster per victim.
   - `safeKi()` treats a corrupt ki value as 0.
 - **`server/game.js`:** round flow (start, submit and cancel, reveal or force, next round, back to lobby, ranking). It changes the room object and returns `{ ok }` or `{ error }`. It stores only the normalized action, never the raw request.
 - **`server/rooms.js`:** the room registry, joining (nickname, avatar, and 8-player checks), host transfer, and `publicState()`.
+- **`server/chat.js`:** participant chat (speech bubbles). `addMessage()` cleans the text (NFC, removes control and zero-width characters, collapses whitespace), allows 1–100 characters and 5 messages per 5 s per player, and numbers it with `room.chatSeq`. Messages are not stored. Per-player send times live in `player.chatTimes`, which `publicState()` never copies.
 - **`server/index.js`:** Socket.IO wiring plus timers (leave grace, room cleanup) and the `/qr/:code` SVG endpoint.
 
 How the pieces fit:
@@ -59,6 +61,10 @@ How the pieces fit:
 - **Socket events use ack callbacks** and reply `{ ok, error }`. Host-only events go through `hostAction()`.
   - `room:enter`: a member is reattached (F-06). A non-member joins the `watch:<code>` socket room, where `room:avatars` keeps the join screen's taken-avatar list live.
   - `round:submit` and `round:cancel` carry `round`, so late requests for an earlier round are rejected.
+  - **Chat (F-34~F-37):** `chat:send { text }` works only for a socket attached to the room (players, spectators, host-only hosts; not people still on the join screen). The server sends `chat:message { code, message }` to the Socket.IO room; there is no history.
+    - There is no chat window. The 💬 top-bar button opens a one-line input bar (`#chat-bar`); while it's open, `body.chat-open` lifts `.sticky-actions` above it.
+    - Each message shows as a speech bubble next to the sender's character for 4–9 s (`showBubble()`). Bubbles live in the fixed, `pointer-events: none` layer `#chat-bubbles` and `layoutBubbles()` repositions them every animation frame while any are showing, so they survive re-renders and scrolling.
+    - Bubbles find the character through `data-chat-anchor="<public ID>"`, which `chatAnchor()` adds to avatars in the lobby list, status panel, reveal arena and ranking. Search order: the current screen, then the status panel. If none is visible (rules screen, scrolled out of the status list), the bubble floats at the top with the nickname (`.is-floating`). Add `chatAnchor()` to any new place that shows a player's avatar.
 - **Leaving (F-29):**
   - **Disconnect:** the player is marked `connected: false`, and the leave grace timer starts. After it expires, the player is marked `left`, and the host passes to the earliest-joined connected player.
   - **Removal:** in the lobby, a left player is removed right away. During a game, the seat stays, and the host can use 강제 진행. Left players are dropped at the next new game or return to the lobby.
@@ -69,6 +75,7 @@ How the pieces fit:
   - `round:next` is refused until `revealMs` has passed.
   - During the animation, `displayedPlayers()` shows the ki and alive state from before the reveal, so the status bar can't spoil the result.
   - `renderArena()` is derived from the current phase alone and is rebuilt on every render. The flying effects from `launchProjectiles()` live in a separate `#arena-fx` layer and fire only when a phase is entered live. With `prefers-reduced-motion`, the flying effects are skipped, but every label and the caption still appear.
+  - **원기옥 effect:** `chargeGenki()` grows a `.genki-orb` above the caster when the skills phase starts; `launchGenki()` (called from `launchProjectiles()`) drops it onto the arena centre and ends in `genkiBlast()` (flash and shock rings). `renderReveal()` toggles `.is-genki` / `.is-genki-impact` on `#arena` and shows `.genki-banner` during the attacks phase, all derived from the phase. Sounds: `genkiCharge`, `genkiLaunch`, `genkiBoom` in `audio.js`.
 - **Shared links and the QR code use `shareOrigin(headers)`** in `index.js`, never `localhost`, so other devices can open them:
   - `PUBLIC_URL` env if set;
   - otherwise the address the request came in on (honoring `X-Forwarded-Host` / `-Proto` from a host or tunnel);
@@ -95,7 +102,7 @@ How the pieces fit:
   - actions for a round that has already been revealed.
 
   Judging must run only once per round, even if "결과 확인" is pressed twice or by two people at once.
-- **Rule details that are easy to get wrong** (§3.2–3.3):
+- **Rule details that are easy to get wrong** (§3.2–3.3, plus '원'):
   - The +1 ki from '아' is added after judging, so it cannot be spent in the same round.
   - An attack spends its ki even if it is blocked.
   - '파' and '에' cancel each other only when the two players aimed at each other.
@@ -103,10 +110,11 @@ How the pieces fit:
   - '순파' eliminates only a player who used '순', and does nothing to anyone else.
   - Attacks are simultaneous: an attacker eliminated in the same round still lands their attack.
   - If everyone left is eliminated in the same round, the game is a draw.
+  - '원' cannot be blocked or dodged, absorbs attacks aimed at its user, and two '원' in one round means everyone is out (draw).
 - **PRD conflicts already resolved:**
   - F-17 (the host can force progress, and anyone who has not chosen counts as '막') overrides §10 #6.
   - Room codes are at least 6 characters, generated with `crypto`, and avoid look-alike characters such as 0/O and 1/I/L. The PRD's `AB12` is only an example.
-- Render user text with `textContent`, never `innerHTML`.
+- Render user text with `textContent`, never `innerHTML`. This includes chat messages.
 - **Copyright (§8, F-31):** do not use the original Dragon Ball images, characters, logo, fonts or music. Avatars are 20 original SVG martial-artist characters, and music is self-made (Web Audio API) or CC0. Record every asset's source and license in `CREDITS.md`.
 - **Mobile first:**
   - no horizontal scroll at 360px width;

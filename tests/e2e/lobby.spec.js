@@ -229,22 +229,22 @@ test.describe('F-05 ~ F-10 대기실과 룰 안내', () => {
     await host.waitScreen('screen-lobby');
   });
 
-  test('F-09 룰 안내: 기술 카드 6장(이름·소모 기·효과·막는 것), 상성표, 예시 3~4개', async ({ game }) => {
+  test('F-09 룰 안내: 기술 카드 7장(원기옥 포함, 이름·소모 기·효과·막는 것), 상성표, 예시', async ({ game }) => {
     const p = await game.player('손님');
     await p.goto(`${game.base}/`);
     await p.click('#btn-rules');
     await p.waitScreen('screen-rules');
     const cards = p.locator('.skill-card');
-    await expect(cards).toHaveCount(6);
-    for (const skill of ['아', '막', '파', '에', '순', '순파']) {
+    await expect(cards).toHaveCount(7);
+    for (const skill of ['아', '막', '파', '에', '순', '순파', '원']) {
       const card = p.locator(`.skill-card[data-skill="${skill}"]`);
       await expect(card.locator('.cost')).toContainText('기');
       await expect(card.locator('.defends')).toContainText(/막는 것|피하는 것/);
     }
-    await expect(p.locator('.rule-table tbody tr')).toHaveCount(3);
+    await expect(p.locator('.rule-table tbody tr')).toHaveCount(4);
     const examples = await p.locator('.rule-examples .example').count();
     expect(examples).toBeGreaterThanOrEqual(3);
-    expect(examples).toBeLessThanOrEqual(4);
+    expect(examples).toBeLessThanOrEqual(6); // 기본 4개 + 원기옥 2개
     await p.click('#btn-rules-close');
     await p.waitScreen('screen-start');
   });

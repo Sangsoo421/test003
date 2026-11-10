@@ -230,6 +230,51 @@ const Sound = (() => {
       tone(freq('E3'), t, 0.25, 'sawtooth', 0.08, 1200, sfxGain);
       tone(freq('C3'), t + 0.18, 0.4, 'sawtooth', 0.08, 1200, sfxGain);
     },
+    // 원기옥: 모이는 소리(올라가는 화음) → 발사(긴 바람 소리) → 대폭발(낮은 굉음)
+    genkiCharge() {
+      const t = ctx.currentTime;
+      for (const [f0, type] of [[110, 'sawtooth'], [165, 'square'], [220, 'triangle']]) {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        const lp = ctx.createBiquadFilter();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 4, t + 0.9);
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(600, t);
+        lp.frequency.exponentialRampToValueAtTime(4000, t + 0.9);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.07, t + 0.7);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1);
+        osc.connect(lp).connect(g).connect(sfxGain);
+        osc.start(t);
+        osc.stop(t + 1.05);
+      }
+    },
+    genkiLaunch() {
+      const t = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      const f = ctx.createBiquadFilter();
+      const g = ctx.createGain();
+      src.buffer = noiseBuffer;
+      f.type = 'bandpass';
+      f.Q.value = 2;
+      f.frequency.setValueAtTime(2500, t);
+      f.frequency.exponentialRampToValueAtTime(200, t + 0.6);
+      g.gain.setValueAtTime(0.45, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
+      src.connect(f).connect(g).connect(sfxGain);
+      src.start(t);
+      src.stop(t + 0.7);
+    },
+    genkiBoom() {
+      const t = ctx.currentTime;
+      kick(t, sfxGain, 1);
+      kick(t + 0.08, sfxGain, 0.8);
+      noise(t, 1.2, 0.5, 'lowpass', 500, sfxGain);
+      noise(t, 0.4, 0.25, 'highpass', 3000, sfxGain);
+      tone(55, t, 1.2, 'sawtooth', 0.12, 300, sfxGain);
+    },
     win() {
       const t = ctx.currentTime;
       ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => tone(freq(n), t + i * 0.12, 0.5, 'square', 0.06, 4000, sfxGain));

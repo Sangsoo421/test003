@@ -8,6 +8,7 @@ const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const rooms = require('./rooms');
 const game = require('./game');
+const chat = require('./chat');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -296,6 +297,17 @@ io.on('connection', (socket) => {
     if (result.error) return reply(ack, { ok: false, error: result.error });
     reply(ack, { ok: true });
     broadcast(room);
+  });
+
+  // 참가자 채팅 (캐릭터 옆 말풍선). 방에 참가한 사람(관전·진행만 하는 호스트 포함)만 보낼 수 있다.
+  socket.on('chat:send', (payload, ack) => {
+    const room = myRoom();
+    if (!room) return reply(ack, { ok: false, error: '방에 참가해 있지 않습니다.' });
+    const text = payload && typeof payload === 'object' ? payload.text : undefined;
+    const result = chat.addMessage(room, me(room), text);
+    if (result.error) return reply(ack, { ok: false, error: result.error });
+    reply(ack, { ok: true });
+    io.to(room.code).emit('chat:message', { code: room.code, message: result.message });
   });
 
   hostAction('game:start', (room) => game.startGame(room));

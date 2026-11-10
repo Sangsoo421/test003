@@ -16,6 +16,9 @@
       <button type="button" id="btn-music" class="btn btn-ghost btn-small" aria-pressed="true">
         <span class="icon" aria-hidden="true">🔊</span><span class="label">음악 켜짐</span>
       </button>
+      <button type="button" id="btn-chat" class="btn btn-ghost btn-small" aria-expanded="false" aria-controls="chat-bar" hidden>
+        <span class="icon" aria-hidden="true">💬</span><span class="label">채팅</span>
+      </button>
       <button type="button" id="btn-rules" class="btn btn-ghost btn-small">
         <span class="icon" aria-hidden="true">📖</span><span>룰</span>
       </button>
@@ -81,10 +84,11 @@
         <li>모두 <strong>기 1개</strong>를 가지고 시작해요.</li>
         <li>매 라운드 모두 <strong>동시에</strong> 기술 1개를 고르고, 호스트가 결과 확인을 누르면 한꺼번에 공개돼요.</li>
         <li>'아'로 모은 기는 판정 <strong>후에</strong> 생겨서 같은 라운드에는 못 써요.</li>
+        <li>기를 <strong>5개</strong> 모으면 필살기 <strong>원기옥</strong>을 쓸 수 있어요.</li>
         <li>마지막 1명이 남으면 <strong>승리</strong>! 모두 동시에 아웃되면 무승부.</li>
       </ul>
 
-      <h3>기술 6가지</h3>
+      <h3>기술 7가지</h3>
       <div class="skill-cards">
         <article class="skill-card" data-skill="아">
           <h4><span class="skill-icon" aria-hidden="true">🔆</span> 아 <span class="cost">기 +1</span></h4>
@@ -116,6 +120,11 @@
           <p>순간이동 공격. '순'을 쓴 대상만 아웃시켜요.</p>
           <p class="defends">피하는 것: '파', '에', '순파'</p>
         </article>
+        <article class="skill-card skill-card-ultimate" data-skill="원">
+          <h4><span class="skill-icon" aria-hidden="true">🌕</span> 원 (원기옥) <span class="cost">기 5 · 전원</span></h4>
+          <p>필살기! 대상을 고르지 않고 <strong>나를 뺀 모두</strong>를 아웃시켜요. 막·순으로도 못 막아요.</p>
+          <p class="defends">막는 것: 나를 노린 '파'·'에'·'순파' (흡수) / 다른 사람도 원기옥을 쓰면 <strong>모두 아웃, 무승부</strong></p>
+        </article>
       </div>
 
       <h3>상성표</h3>
@@ -129,6 +138,7 @@
             <tr><th scope="row">💥 파</th><td>막, 순, 순파 / 또는 공격한 사람을 겨눈 파·에</td></tr>
             <tr><th scope="row">🔥 에</th><td>순, 순파 / 또는 공격한 사람을 겨눈 에</td></tr>
             <tr><th scope="row">🌀 순파</th><td>순이 아닌 기술이면 모두 안전</td></tr>
+            <tr><th scope="row">🌕 원</th><td>막을 수 없음 (원기옥끼리 부딪히면 모두 아웃)</td></tr>
           </tbody>
         </table>
       </div>
@@ -168,6 +178,22 @@
             <span class="ex-player">B<span class="ex-skill" data-skill="순">💨 순</span></span>
           </div>
           <p class="ex-result"><span class="tag tag-out">B 아웃</span> B가 '아'·'막'이었다면 아무 일도 없어요.</p>
+        </li>
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="원">🌕 원</span></span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="파">💥 파→A</span></span>
+            <span class="ex-player">C<span class="ex-skill" data-skill="막">🛡️ 막</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">B, C 아웃</span> <span class="tag tag-safe">A 승리</span> 원기옥은 막을 수 없고, A를 노린 '파'는 흡수돼요.</p>
+        </li>
+        <li class="example">
+          <div class="ex-row">
+            <span class="ex-player">A<span class="ex-skill" data-skill="원">🌕 원</span></span>
+            <span class="ex-arrow" aria-hidden="true">⇄</span>
+            <span class="ex-player">B<span class="ex-skill" data-skill="원">🌕 원</span></span>
+          </div>
+          <p class="ex-result"><span class="tag tag-out">모두 아웃</span> 원기옥끼리 부딪혀 무승부!</p>
         </li>
       </ol>
       <div class="sticky-actions">
@@ -276,6 +302,16 @@
       <button type="button" id="btn-reopen" class="btn btn-primary btn-large">이 탭에서 다시 열기</button>
     </section>
   </main>
+
+  <!-- 참가자 채팅: 보낸 말은 화면에 보이는 그 사람 캐릭터 옆에 말풍선으로 잠깐 뜬다 -->
+  <form id="chat-bar" class="chat-bar" novalidate hidden>
+    <label for="input-chat" class="sr-only">말풍선으로 보낼 말</label>
+    <input id="input-chat" class="input" type="text" autocomplete="off" maxlength="100" placeholder="내 캐릭터 옆에 띄울 말 (100자까지)" enterkeyhint="send">
+    <button type="submit" id="btn-chat-send" class="btn btn-primary">보내기</button>
+    <button type="button" id="btn-chat-close" class="btn btn-ghost" aria-label="채팅 닫기">✕</button>
+  </form>
+  <div id="chat-bubbles" class="chat-bubbles" aria-hidden="true"></div>
+  <p id="chat-live" class="sr-only" aria-live="polite"></p>
 
   <!-- F-17: 강제 진행 확인 창. 실수로 누르지 않게 '취소'에 먼저 포커스 -->
   <dialog id="force-dialog" class="dialog" aria-labelledby="force-title">

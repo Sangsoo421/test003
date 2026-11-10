@@ -13,7 +13,9 @@ const SKILLS = [
   { name: '에', icon: '🔥', cost: 3, attack: true, effect: '강한 공격' },
   { name: '순', icon: '💨', cost: 1, attack: false, effect: '파·에 피함' },
   { name: '순파', icon: '🌀', cost: 2, attack: true, effect: '순을 공격' },
+  { name: '원', icon: '🌕', cost: 5, attack: false, ultimate: true, effect: '원기옥! 나 빼고 전원 아웃' },
 ];
+const ULTIMATE = '원';
 const SKILL_BY_NAME = Object.fromEntries(SKILLS.map((s) => [s.name, s]));
 
 const OUTCOME_TEXT = {
@@ -23,6 +25,7 @@ const OUTCOME_TEXT = {
   clash: '상쇄',
   overpowered: "'에'에 밀림",
   no_effect: '효과 없음',
+  absorbed: '원기옥에 흡수',
 };
 
 // 결과 공개 때 대상 카드에 붙는 표시. 색과 함께 아이콘·글자로 구분한다.
@@ -33,6 +36,7 @@ const IMPACT_LABEL = {
   clash: '⚡ 상쇄',
   overpowered: '🔥 파를 이김',
   no_effect: '· 효과 없음',
+  absorbed: '🌕 흡수',
 };
 
 const AVATAR_BY_ID = Object.fromEntries(AVATARS.map((a) => [a.id, a]));
@@ -222,6 +226,7 @@ function goStart(errorMessage) {
   state.code = null;
   state.room = null;
   stopReveal();
+  resetChat();
   if (location.pathname !== '/') history.replaceState(null, '', '/');
   $('start-error').textContent = errorMessage || '';
   render();
@@ -408,7 +413,7 @@ function renderLobby(room) {
   list.replaceChildren();
   for (const p of room.players) {
     const li = document.createElement('li');
-    li.appendChild(createAvatar(p.avatarId));
+    li.appendChild(chatAnchor(createAvatar(p.avatarId), p.id));
     li.appendChild(playerMeta(p, room).meta);
     list.appendChild(li);
   }
@@ -479,7 +484,7 @@ function renderStatusPanel(room) {
       crown.setAttribute('aria-label', '호스트');
       li.appendChild(crown);
     }
-    li.appendChild(createAvatar(p.avatarId));
+    li.appendChild(chatAnchor(createAvatar(p.avatarId), p.id));
     const { meta, badges } = playerMeta(p, room, { compact: true });
     if (!p.playing) {
       // 진행만 하는 호스트: "진행만" 배지는 playerMeta가 붙인다.
@@ -536,7 +541,7 @@ function renderChoice(room, self) {
   for (const s of SKILLS) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'skill-btn';
+    btn.className = s.ultimate ? 'skill-btn skill-btn-ultimate' : 'skill-btn';
     btn.dataset.skill = s.name;
     const lacking = self.ki < s.cost;
     if (lacking) btn.classList.add('is-lacking');
@@ -663,13 +668,21 @@ function onPhaseEnter(phase, room, total) {
   if (!room || room.status !== 'revealing') return;
   const result = room.lastResult;
   if (phase.startsWith('count')) Sound.play('count');
-  if (phase === 'skills') Sound.play('reveal');
+  const genki = genkiCasters(result).length > 0;
+  if (phase === 'skills') {
+    Sound.play('reveal');
+    if (genki) {
+      Sound.play('genkiCharge');
+      chargeGenki(result, total * 0.19);
+    }
+  }
   if (phase === 'attacks' && result.attacks.length) {
-    Sound.play('attack');
+    Sound.play(genki ? 'genkiLaunch' : 'attack');
     launchProjectiles(result, total * 0.14);
   }
   if (phase === 'impact') {
-    if (result.attacks.some((a) => a.outcome === 'hit')) Sound.play('hit');
+    if (genki) Sound.play('genkiBoom');
+    else if (result.attacks.some((a) => a.outcome === 'hit')) Sound.play('hit');
     else if (result.attacks.length) Sound.play('block');
   }
   if (phase === 'outs' && result.eliminated.length) Sound.play('out');
@@ -687,8 +700,11 @@ function cardCenter(playerId) {
 function launchProjectiles(result, duration) {
   if (reducedMotion.matches) return;
   const fx = $('arena-fx');
-  fx.replaceChildren();
+  // 모으는 중인 원기옥은 남겨 두고 날려 보낸다.
+  fx.querySelectorAll(':scope > :not(.genki-orb)').forEach((node) => node.remove());
+  launchGenki(result, duration);
   for (const atk of result.attacks) {
+    if (atk.skill === ULTIMATE) continue;
     const from = cardCenter(atk.attackerId);
     const to = cardCenter(atk.targetId);
     if (!from || !to) continue;
@@ -707,6 +723,116 @@ function launchProjectiles(result, duration) {
       { duration, easing: 'cubic-bezier(0.5, 0, 0.9, 0.6)', fill: 'forwards' },
     );
     anim.onfinish = () => dot.remove();
+  }
+}
+
+// ---------- 원기옥 연출 ----------
+function genkiCasters(result) {
+  return result.actions.filter((a) => a.skill === ULTIMATE).map((a) => a.playerId);
+}
+
+function arenaCenter() {
+  const box = $('arena').getBoundingClientRect();
+  return { x: box.width / 2, y: box.height / 2 };
+}
+
+// 기술 공개 때: 원기옥을 쓴 사람 머리 위로 빛 알갱이가 모여들며 거대한 구체가 자란다.
+function chargeGenki(result, duration) {
+  if (reducedMotion.matches) return;
+  const fx = $('arena-fx');
+  const box = $('arena').getBoundingClientRect();
+  for (const id of genkiCasters(result)) {
+    const c = cardCenter(id);
+    if (!c) continue;
+    const orb = el('div', undefined, 'genki-orb');
+    orb.dataset.caster = id;
+    const y = Math.max(34, c.y - 46);
+    orb.style.left = `${c.x}px`;
+    orb.style.top = `${y}px`;
+    fx.appendChild(orb);
+    orb.animate(
+      [
+        { transform: 'scale(0.1)', opacity: 0.3 },
+        { transform: 'scale(0.7)', opacity: 1, offset: 0.6 },
+        { transform: 'scale(1)', opacity: 1 },
+      ],
+      { duration, easing: 'ease-out', fill: 'forwards' },
+    );
+    // 사방에서 모여드는 기
+    for (let i = 0; i < 14; i++) {
+      const angle = (Math.PI * 2 * i) / 14 + Math.random() * 0.4;
+      const dist = Math.max(box.width, box.height) * (0.55 + Math.random() * 0.3);
+      const mote = el('div', undefined, 'genki-mote');
+      mote.style.left = `${c.x}px`;
+      mote.style.top = `${y}px`;
+      fx.appendChild(mote);
+      const anim = mote.animate(
+        [
+          { transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px) scale(1.4)`, opacity: 0 },
+          { opacity: 1, offset: 0.3 },
+          { transform: 'translate(0, 0) scale(0.3)', opacity: 0.2 },
+        ],
+        { duration: duration * (0.55 + Math.random() * 0.4), delay: Math.random() * duration * 0.3, easing: 'ease-in' },
+      );
+      anim.onfinish = () => mote.remove();
+    }
+  }
+}
+
+// 공격 때: 구체가 무대 한가운데로 떨어지며 무대 전체를 덮을 만큼 커지고, 섬광과 충격파가 퍼진다.
+function launchGenki(result, duration) {
+  const casters = genkiCasters(result);
+  if (!casters.length) return;
+  const fx = $('arena-fx');
+  const center = arenaCenter();
+  for (const id of casters) {
+    let orb = fx.querySelector(`.genki-orb[data-caster="${id}"]`);
+    if (!orb) {
+      // 기술 공개 단계 이후에 화면을 열었으면 그 자리에서 바로 만든다.
+      const c = cardCenter(id);
+      if (!c) continue;
+      orb = el('div', undefined, 'genki-orb');
+      orb.dataset.caster = id;
+      orb.style.left = `${c.x}px`;
+      orb.style.top = `${Math.max(34, c.y - 46)}px`;
+      fx.appendChild(orb);
+    }
+    const from = { x: parseFloat(orb.style.left), y: parseFloat(orb.style.top) };
+    orb.getAnimations().forEach((a) => a.cancel());
+    const anim = orb.animate(
+      [
+        { transform: 'translate(0, 0) scale(1)' },
+        { transform: `translate(${(center.x - from.x) * 0.15}px, ${(center.y - from.y) * 0.15 - 20}px) scale(1.3)`, offset: 0.25 },
+        { transform: `translate(${center.x - from.x}px, ${center.y - from.y}px) scale(9)`, opacity: 1 },
+      ],
+      { duration, easing: 'cubic-bezier(0.6, 0, 0.9, 0.5)', fill: 'forwards' },
+    );
+    anim.onfinish = () => {
+      orb.remove();
+      genkiBlast(center, casters.length > 1);
+    };
+  }
+}
+
+function genkiBlast(center, clash) {
+  const fx = $('arena-fx');
+  if (fx.querySelector('.genki-flash')) return; // 원기옥이 여러 개여도 폭발은 한 번
+  const flash = el('div', undefined, clash ? 'genki-flash is-clash' : 'genki-flash');
+  fx.appendChild(flash);
+  flash.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out', fill: 'forwards' }).onfinish = () =>
+    flash.remove();
+  for (let i = 0; i < 3; i++) {
+    const ring = el('div', undefined, 'genki-ring');
+    ring.style.left = `${center.x}px`;
+    ring.style.top = `${center.y}px`;
+    fx.appendChild(ring);
+    ring.animate(
+      [
+        { transform: 'scale(0.2)', opacity: 1 },
+        { transform: 'scale(7)', opacity: 0 },
+      ],
+      { duration: 800, delay: i * 140, easing: 'ease-out', fill: 'backwards' },
+    ).onfinish = () => ring.remove();
   }
 }
 
@@ -729,7 +855,8 @@ function renderArena(room) {
     const action = result.actions.find((a) => a.playerId === p.id);
     const card = el('div', undefined, 'arena-card');
     card.dataset.player = p.id;
-    card.appendChild(createAvatar(p.avatarId));
+    if (showSkills && action.skill === ULTIMATE) card.classList.add('is-genki-caster');
+    card.appendChild(chatAnchor(createAvatar(p.avatarId), p.id));
     card.appendChild(el('span', p.nickname, 'player-name'));
 
     const bubble = el('span', undefined, 'reveal-bubble');
@@ -750,7 +877,11 @@ function renderArena(room) {
       if (incoming.length) {
         const impacts = el('div', undefined, 'impact-list');
         for (const atk of incoming) {
-          impacts.appendChild(el('span', IMPACT_LABEL[atk.outcome], `impact impact-${atk.outcome}`));
+          if (atk.skill === ULTIMATE) {
+            impacts.appendChild(el('span', '🌕 원기옥', 'impact impact-hit impact-genki'));
+          } else {
+            impacts.appendChild(el('span', IMPACT_LABEL[atk.outcome], `impact impact-${atk.outcome}`));
+          }
         }
         card.appendChild(impacts);
         if (state.reveal.phase === 'impact') {
@@ -778,13 +909,24 @@ function renderReveal(room) {
   const counting = Boolean(phase && phase.startsWith('count'));
   $('arena').classList.toggle('is-counting', counting);
   if (counting) stage.appendChild(el('p', phase.slice(-1), 'countdown'));
+  // 원기옥: 기술 공개부터 충돌까지 무대 전체를 금빛으로 물들이고 큰 글자를 띄운다.
+  const casters = genkiCasters(result);
+  const genkiPhase = casters.length > 0 && ['skills', 'attacks', 'impact'].includes(phase);
+  $('arena').classList.toggle('is-genki', genkiPhase);
+  $('arena').classList.toggle('is-genki-impact', casters.length > 0 && phase === 'impact');
+  // 기술 공개 때는 카드의 기술을 읽을 수 있게 비워 두고, 발사 순간에 큰 글자를 띄운다.
+  if (genkiPhase && phase === 'attacks') {
+    const banner = el('p', undefined, 'genki-banner');
+    banner.appendChild(el('span', '元氣玉', 'genki-banner-sub'));
+    banner.appendChild(el('span', casters.length > 1 ? '원기옥 대충돌!!' : '원기옥!!', 'genki-banner-main'));
+    stage.appendChild(banner);
+  }
   let caption = '';
   if (counting) caption = `${phase.slice(-1)}…`;
-  else if (phase === 'skills') caption = '기술 공개!';
-  else if (phase === 'attacks') caption = result.attacks.length ? '공격!' : '공격 없음';
-  else if (phase === 'impact') {
-    caption = result.attacks.map((a) => `${nameOf(a.attackerId)}의 ${a.skill}: ${OUTCOME_TEXT[a.outcome]}`).join(' / ') || '이번 라운드에는 공격이 없습니다.';
-  } else if (phase === 'outs') caption = outText(result);
+  else if (phase === 'skills') caption = casters.length ? `기술 공개! ${casters.map(nameOf).join(', ')}의 원기옥이 모인다…!` : '기술 공개!';
+  else if (phase === 'attacks') caption = casters.length ? '원기옥 발사!!' : result.attacks.length ? '공격!' : '공격 없음';
+  else if (phase === 'impact') caption = impactText(result, casters);
+  else if (phase === 'outs') caption = outText(result);
   $('reveal-caption').textContent = caption;
 
   const done = phase === 'done';
@@ -795,6 +937,16 @@ function renderReveal(room) {
   $('btn-next').disabled = !done;
   $('btn-next').hidden = !room.isHost || !done;
   $('next-wait').hidden = room.isHost || !done;
+}
+
+function impactText(result, casters) {
+  if (casters.length > 1) return `원기옥끼리 충돌! ${casters.map(nameOf).join(', ')} 모두 휩쓸렸다!`;
+  const parts = [];
+  if (casters.length) parts.push(`${nameOf(casters[0])}의 원기옥: 전원 명중!`);
+  for (const a of result.attacks) {
+    if (a.skill !== ULTIMATE) parts.push(`${nameOf(a.attackerId)}의 ${a.skill}: ${OUTCOME_TEXT[a.outcome]}`);
+  }
+  return parts.join(' / ') || '이번 라운드에는 공격이 없습니다.';
 }
 
 function outText(result) {
@@ -809,7 +961,10 @@ function renderSummary(result) {
   for (const a of result.actions) {
     let text = `${SKILL_BY_NAME[a.skill].icon} ${actionText(a)}`;
     const atk = result.attacks.find((x) => x.attackerId === a.playerId);
-    if (atk) text += ` — ${OUTCOME_TEXT[atk.outcome]}`;
+    if (a.skill === ULTIMATE) {
+      const n = result.attacks.filter((x) => x.attackerId === a.playerId).length;
+      text += ` — 원기옥 발동! ${n}명 명중`;
+    } else if (atk) text += ` — ${OUTCOME_TEXT[atk.outcome]}`;
     if (a.skill === '아') text += ' — 기 +1';
     if (result.forced.includes(a.playerId)) text += ' (선택하지 않아 막 처리)';
     const p = playerById(a.playerId);
@@ -855,7 +1010,7 @@ function renderEnd(room) {
     if (r.rank === 1) li.classList.add('is-first');
     const p = playerById(r.playerId);
     li.appendChild(el('span', `${MEDALS[r.rank] || ''} ${r.rank}위`.trim(), 'rank'));
-    if (p) li.appendChild(createAvatar(p.avatarId));
+    if (p) li.appendChild(chatAnchor(createAvatar(p.avatarId), p.id));
     li.appendChild(el('span', nameOf(r.playerId), 'player-name'));
     li.appendChild(el('span', r.eliminatedRound === null ? '생존' : `${r.eliminatedRound}라운드 아웃`, 'hint'));
     list.appendChild(li);
@@ -888,6 +1043,149 @@ function burstConfetti() {
 $('btn-new-game').addEventListener('click', () => emit('game:start'));
 $('btn-to-lobby').addEventListener('click', () => emit('game:lobby'));
 
+// ---------- 채팅 (캐릭터 옆 말풍선) ----------
+// 보낸 말은 지금 화면에 보이는 그 사람의 캐릭터(대기실 목록, 상태창, 결과 무대, 순위) 옆에 잠깐 떠오른다.
+// 말풍선은 #chat-bubbles 고정 레이어에 두고, 화면이 다시 그려지거나 스크롤돼도 매 프레임 캐릭터 위치를 따라간다.
+const CHAT_MAX = 100;
+const bubbles = new Map(); // 공개 ID → { el, until }
+let bubbleFrame = null;
+
+function bubbleDuration(text) {
+  return Math.min(9000, 4000 + [...text].length * 90);
+}
+
+function resetChat() {
+  bubbles.clear();
+  cancelAnimationFrame(bubbleFrame);
+  bubbleFrame = null;
+  $('chat-bubbles').replaceChildren();
+  setChatOpen(false, { focus: false });
+}
+
+// 캐릭터 이미지에 붙이는 표시. 말풍선이 이 위치를 찾아 붙는다.
+function chatAnchor(node, playerId) {
+  node.dataset.chatAnchor = playerId;
+  return node;
+}
+
+function visibleRect(node) {
+  if (!node || node.offsetParent === null) return null;
+  const r = node.getBoundingClientRect();
+  // 옆으로 넘기는 상태창 안에서 가려진 캐릭터는 보이지 않는 것으로 본다.
+  const clip = node.closest('.status-list');
+  const c = clip ? clip.getBoundingClientRect() : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+  const cx = r.left + r.width / 2;
+  if (cx < Math.max(0, c.left) || cx > Math.min(window.innerWidth, c.right)) return null;
+  if (r.bottom < 0 || r.top > window.innerHeight) return null;
+  return r;
+}
+
+// 지금 화면의 캐릭터를 먼저, 없으면 게임 중 상태창의 캐릭터를 찾는다.
+function findAnchor(playerId) {
+  const selector = `[data-chat-anchor="${CSS.escape(playerId)}"]`;
+  for (const scope of [$(state.currentScreen), $('status-panel')]) {
+    if (!scope || scope.hidden) continue;
+    for (const node of scope.querySelectorAll(selector)) {
+      const r = visibleRect(node);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
+function layoutBubbles() {
+  bubbleFrame = null;
+  const now = performance.now();
+  const topbar = document.querySelector('.topbar').getBoundingClientRect();
+  let floatY = Math.max(8, topbar.bottom + 8);
+  for (const [id, b] of bubbles) {
+    if (now > b.until) {
+      bubbles.delete(id);
+      b.el.classList.add('is-leaving');
+      setTimeout(() => b.el.remove(), 300);
+      continue;
+    }
+    const r = findAnchor(id);
+    b.el.classList.toggle('is-floating', !r);
+    const w = b.el.offsetWidth;
+    const h = b.el.offsetHeight;
+    let x;
+    let y;
+    if (r) {
+      const cx = r.left + r.width / 2;
+      const below = r.top - h - 12 < 4;
+      y = below ? r.bottom + 12 : r.top - h - 12;
+      x = Math.min(Math.max(8, cx - w / 2), window.innerWidth - w - 8);
+      b.el.classList.toggle('is-below', below);
+      b.el.style.setProperty('--tail', `${Math.min(Math.max(14, cx - x), w - 14)}px`);
+    } else {
+      // 캐릭터가 화면에 없으면(룰 안내 등) 이름을 붙여 위쪽에 띄운다.
+      x = (window.innerWidth - w) / 2;
+      y = floatY;
+      floatY += h + 6;
+    }
+    b.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  }
+  if (bubbles.size) bubbleFrame = requestAnimationFrame(layoutBubbles);
+}
+
+function showBubble(message) {
+  const old = bubbles.get(message.playerId);
+  if (old) old.el.remove();
+  const mine = Boolean(state.room) && message.playerId === state.room.you;
+  const bubble = el('div', undefined, mine ? 'chat-bubble is-mine' : 'chat-bubble');
+  bubble.dataset.player = message.playerId;
+  bubble.appendChild(el('span', message.nickname, 'chat-bubble-name'));
+  bubble.appendChild(el('span', message.text, 'chat-bubble-text'));
+  $('chat-bubbles').appendChild(bubble);
+  bubbles.set(message.playerId, { el: bubble, until: performance.now() + bubbleDuration(message.text) });
+  // 화면 낭독기에는 누가 무슨 말을 했는지 읽어 준다.
+  $('chat-live').textContent = `${message.nickname}: ${message.text}`;
+  if (!bubbleFrame) layoutBubbles();
+}
+
+// 방에 참가한 사람에게만 채팅 버튼을 보여준다.
+function renderChatButton() {
+  const member = Boolean(state.room && state.room.you);
+  $('btn-chat').hidden = !member;
+  if (!member && !$('chat-bar').hidden) setChatOpen(false, { focus: false });
+}
+
+function setChatOpen(open, { focus = true } = {}) {
+  $('chat-bar').hidden = !open;
+  document.body.classList.toggle('chat-open', open);
+  $('btn-chat').setAttribute('aria-expanded', String(open));
+  if (!focus) return;
+  if (open) $('input-chat').focus({ preventScroll: true });
+  else $('btn-chat').focus({ preventScroll: true });
+}
+
+$('btn-chat').addEventListener('click', () => setChatOpen($('chat-bar').hidden));
+$('btn-chat-close').addEventListener('click', () => setChatOpen(false));
+$('chat-bar').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setChatOpen(false);
+});
+
+$('chat-bar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('input-chat');
+  const text = input.value.trim();
+  if (!text) return;
+  if ([...text].length > CHAT_MAX) return toast(`메시지는 ${CHAT_MAX}자까지 보낼 수 있어요.`);
+  $('btn-chat-send').disabled = true;
+  socket.emit('chat:send', { text }, (res) => {
+    $('btn-chat-send').disabled = false;
+    if (!res || !res.ok) return toast((res && res.error) || '메시지를 보내지 못했습니다.');
+    input.value = '';
+    input.focus({ preventScroll: true });
+  });
+});
+
+socket.on('chat:message', ({ code, message } = {}) => {
+  if (code !== state.code || !message) return;
+  showBubble(message);
+});
+
 // ---------- 서버 상태 반영 ----------
 function render() {
   const room = state.room;
@@ -895,6 +1193,7 @@ function render() {
   const inGame = Boolean(room) && (room.status === 'choosing' || room.status === 'revealing');
   $('status-panel').hidden = !inGame || state.rulesOpen;
   Sound.setTrack(room ? STATUS_TRACK[room.status] : 'lobby');
+  renderChatButton();
   if (!room) return;
 
   document.querySelectorAll('.host-only').forEach((node) => {
@@ -931,6 +1230,7 @@ socket.on('fatal', (message) => goStart(message));
 socket.on('session:replaced', () => {
   socket.disconnect();
   stopReveal();
+  resetChat();
   state.room = null;
   render();
   showScreen('screen-notice');

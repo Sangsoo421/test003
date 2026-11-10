@@ -9,6 +9,15 @@ const SHOT_DIR = path.join(__dirname, '..', '..', 'screenshots');
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 const WIDTHS = [360, 768, 1440];
 
+/** 멈춘 시계를 50ms씩 넘기며 결과 공개가 그 단계에 들어갈 때까지 진행한다. */
+async function advanceToPhase(page, phase) {
+  for (let i = 0; i < 200; i++) {
+    if (await page.evaluate((ph) => state.reveal.phase === ph, phase)) return;
+    await page.clock.runFor(50);
+  }
+  throw new Error(`결과 공개가 '${phase}' 단계에 이르지 않음 (지금: ${await page.evaluate(() => state.reveal.phase)})`);
+}
+
 /** 지금 화면을 세 너비로 검사하고 스크린샷을 남긴다. 문제는 issues 배열에 모은다. */
 async function audit(page, name, issues, { axe = true } = {}) {
   const original = page.viewportSize();
@@ -96,12 +105,17 @@ test.describe('화면별 스크린샷·반응형·접근성', () => {
     await F.choose('파', G);
     await G.choose('파', F);
     await H.choose('순파', C);
+    // 8명 화면의 전체 스크린샷은 1초 넘게 걸려 0.6초짜리 단계(공격 등)를 놓친다.
+    // A의 시계를 멈춰 두고 단계마다 시간을 직접 넘겨, 단계가 바뀌지 않은 상태에서 찍는다.
+    await A.clock.install();
+    await A.clock.pauseAt((await A.evaluate(() => Date.now())) + 500);
     await A.click('#btn-reveal');
+    await A.waitForFunction(() => state.reveal.phase === 'count3', null, { polling: 30 });
     for (const phase of ['count2', 'skills', 'attacks', 'impact', 'outs']) {
-      // 백그라운드 페이지는 requestAnimationFrame이 멈추므로 시간 간격으로 확인
-      await A.waitForFunction((ph) => state.reveal.phase === ph, phase, { polling: 30 });
+      await advanceToPhase(A, phase);
       await A.screenshot({ path: path.join(SHOT_DIR, `S06-reveal-${phase}-360.png`), fullPage: true });
     }
+    await A.clock.resume();
     await A.waitSummary();
     await audit(A, 'S06-reveal-done', issues);
     await game.next(A, players);

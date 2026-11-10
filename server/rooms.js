@@ -59,6 +59,7 @@ function createRoom(creatorSecret) {
     lastResult: null,
     ranking: null,
     revealedAt: null,
+    chatSeq: 0, // 채팅 메시지 번호 (server/chat.js)
   };
   rooms.set(room.code, room);
   return room;

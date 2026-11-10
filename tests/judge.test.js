@@ -271,3 +271,36 @@ test('actions의 키가 __proto__여도 판정이 오염되지 않음', () => {
   assert.deepEqual(r.eliminated, []);
   assert.equal(r.actions[1].skill, '막');
 });
+
+// ---------- 원기옥 '원' (기 5, 대상 없음) ----------
+test("원기옥: 쓴 사람 외 생존자 전원 아웃 (막·순·순파·에로도 못 막음)", () => {
+  const r = run({ A: ['원'], B: ['막'], C: ['순'], D: ['순파', 'C'], E: ['에', 'B'], F: ['아'] });
+  assert.deepEqual(out(r), ['B', 'C', 'D', 'E', 'F']);
+  assert.ok(r.attacks.filter((a) => a.skill === '원').every((a) => a.attackerId === 'A' && a.outcome === 'hit'));
+  assert.equal(r.attacks.filter((a) => a.skill === '원').length, 5);
+});
+
+test("원기옥: 원을 쓴 사람을 노린 파·에·순파는 흡수되어 원 사용자는 생존", () => {
+  const r = run({ A: ['원'], B: ['파', 'A'], C: ['에', 'A'], D: ['순파', 'A'] });
+  assert.deepEqual(out(r), ['B', 'C', 'D']);
+  for (const id of ['B', 'C', 'D']) assert.equal(outcomeOf(r, id), 'absorbed');
+});
+
+test('원기옥: 두 명 이상이 쓰면 모두 아웃 (무승부)', () => {
+  assert.deepEqual(out(run({ A: ['원'], B: ['원'] })), ['A', 'B']);
+  assert.deepEqual(out(run({ A: ['원'], B: ['원'], C: ['막'] })), ['A', 'B', 'C']);
+});
+
+test('원기옥: 기 5개 소모, 기 4개로는 쓸 수 없음, 대상 지정 불가', () => {
+  assert.equal(run({ A: ['원'], B: ['막'] }, { A: 5, B: 0 }).ki.A, 0);
+  assert.equal(run({ A: ['원'], B: ['막'] }, { A: 7, B: 0 }).ki.A, 2);
+  assert.ok(validateAction({ id: 'A', ki: 4 }, { skill: '원', targetId: null }, alive));
+  assert.equal(validateAction({ id: 'A', ki: 5 }, { skill: '원', targetId: null }, alive), null);
+  assert.ok(validateAction({ id: 'A', ki: 5 }, { skill: '원', targetId: 'B' }, alive));
+});
+
+test('원기옥: 판정에 넘어온 대상은 무시', () => {
+  const r = judge([{ id: 'A', ki: 5 }, { id: 'B', ki: 0 }], { A: { skill: '원', targetId: 'A' } });
+  assert.equal(r.actions[0].targetId, null);
+  assert.deepEqual(r.eliminated, ['B']);
+});

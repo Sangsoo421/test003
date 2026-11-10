@@ -10,6 +10,8 @@ const SKILLS = Object.freeze(Object.assign(Object.create(null), {
   에: Object.freeze({ cost: 3, gain: 0, attack: true }),
   순: Object.freeze({ cost: 1, gain: 0, attack: false }),
   순파: Object.freeze({ cost: 2, gain: 0, attack: true }),
+  // 원기옥: 대상을 고르지 않고 자신을 뺀 생존자 전원을 아웃시킨다. 일반 공격(파·에·순파)은 흡수한다.
+  원: Object.freeze({ cost: 5, gain: 0, attack: false, ultimate: true }),
 }));
 
 // 선택하지 않은 참가자는 '막'으로 처리한다 (F-17).
@@ -49,7 +51,9 @@ function parseAction(raw) {
 //   clash       서로를 겨눈 같은 기술끼리 상쇄
 //   overpowered 대상이 공격자를 겨눈 '에'로 '파'를 이겨냄
 //   no_effect   '순파'가 '순' 이외의 기술을 쓴 대상에게는 효과 없음
+//   absorbed    대상이 쓴 '원'(원기옥)에 흡수됨
 function resolveAttack(attackerId, skill, defense) {
+  if (defense.skill === '원') return 'absorbed';
   const aimsBack = defense.targetId === attackerId;
   if (skill === '파') {
     if (defense.skill === '막') return 'blocked';
@@ -109,6 +113,17 @@ function judge(players, actions) {
     const outcome = resolveAttack(p.id, skill, defense);
     attacks.push({ attackerId: p.id, targetId, skill, outcome });
     if (outcome === 'hit') hit.add(targetId);
+  }
+
+  // 원기옥: 쓴 사람 외 생존자 전원이 아웃된다. 막기·피하기로 막을 수 없다.
+  // 두 명 이상이 쓰면 서로를 아웃시켜 모두 아웃(무승부)이 된다.
+  for (const p of players) {
+    if (!SKILLS[chosen[p.id].skill].ultimate) continue;
+    for (const q of players) {
+      if (q.id === p.id) continue;
+      attacks.push({ attackerId: p.id, targetId: q.id, skill: chosen[p.id].skill, outcome: 'hit' });
+      hit.add(q.id);
+    }
   }
 
   // 공격 기술은 결과와 상관없이 기를 소모하고, '아'로 얻은 기는 판정 후에 더한다.

@@ -343,3 +343,40 @@ test('진행만 하는 호스트: 캐릭터 없이 입장, 인원·게임에 포
   // 진행자가 나가면 게임에 참가하는 사람이 호스트를 이어받는다.
   assert.equal(rooms.transferHost(room, host.id).id, 'a');
 });
+
+// ---------- 채팅 (server/chat.js) ----------
+const chat = require('../server/chat');
+
+test('채팅: 메시지를 정리하고 번호를 붙이며, 방에 보관하지 않음', () => {
+  const room = rooms.createRoom('chat-secret-1');
+  const { player } = rooms.addPlayer(room, { secret: 's1', nickname: '하나', avatarId: 'char-01' });
+  const r1 = chat.addMessage(room, player, '  안녕\n하세요  ', 1000);
+  assert.equal(r1.message.text, '안녕 하세요');
+  assert.equal(r1.message.playerId, player.id);
+  assert.equal(r1.message.nickname, '하나');
+  assert.equal(r1.message.secret, undefined);
+  const r2 = chat.addMessage(room, player, '👍', 2000);
+  assert.equal(r2.message.id, r1.message.id + 1);
+  const state = JSON.stringify(rooms.publicState(room, player.id));
+  assert.ok(!state.includes('chatTimes'));
+  assert.ok(!state.includes('안녕'));
+});
+
+test('채팅: 빈 메시지·보이지 않는 글자·문자열 아님·너무 긴 메시지는 거부', () => {
+  const room = rooms.createRoom('chat-secret-2');
+  const { player } = rooms.addPlayer(room, { secret: 's1', nickname: '하나', avatarId: 'char-01' });
+  for (const bad of ['', '   ', '\u200b\u200b', '\u200d', '\u202e', null, 42, { text: 'x' }, ['x'], 'x'.repeat(101)]) {
+    assert.ok(chat.addMessage(room, player, bad, 0).error, JSON.stringify(bad));
+  }
+  assert.ok(chat.addMessage(room, player, 'x'.repeat(100), 0).message);
+  assert.equal(chat.addMessage(room, player, 'a\u200bb\u202ec', 0).message.text, 'abc');
+  assert.ok(chat.addMessage(room, null, '안녕', 0).error);
+});
+
+test('채팅: 5초에 5개까지만 보낼 수 있음', () => {
+  const room = rooms.createRoom('chat-secret-3');
+  const { player } = rooms.addPlayer(room, { secret: 's1', nickname: '하나', avatarId: 'char-01' });
+  for (let i = 0; i < chat.RATE_MAX; i++) assert.ok(chat.addMessage(room, player, `m${i}`, 1000 + i).message);
+  assert.ok(chat.addMessage(room, player, '또', 1010).error);
+  assert.ok(chat.addMessage(room, player, '이제 됨', 1000 + chat.RATE_WINDOW_MS + 10).message);
+});
