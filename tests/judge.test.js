@@ -86,6 +86,21 @@ test('§3.4-12 A: 순파→B / B: 순파→A → 상쇄', () => {
   assert.equal(outcomeOf(r, 'A'), 'clash');
 });
 
+test('§3.4-13 A: 원 / B: 막 / C: 순 → B, C 아웃, A 승리', () => {
+  assert.deepEqual(out(run({ A: ['원'], B: ['막'], C: ['순'] })), ['B', 'C']);
+});
+
+test('§3.4-14 A: 원 / B: 파→A / C: 에→A → B, C 아웃, A 생존 (흡수)', () => {
+  const r = run({ A: ['원'], B: ['파', 'A'], C: ['에', 'A'] });
+  assert.deepEqual(out(r), ['B', 'C']);
+  assert.equal(outcomeOf(r, 'B'), 'absorbed');
+  assert.equal(outcomeOf(r, 'C'), 'absorbed');
+});
+
+test('§3.4-15 A: 원 / B: 원 / C: 아 → 모두 아웃 (무승부)', () => {
+  assert.deepEqual(out(run({ A: ['원'], B: ['원'], C: ['아'] })), ['A', 'B', 'C']);
+});
+
 // ---------- §3.3 상성표: 공격 3종 × 방어 6종 ----------
 const DEFENDS = {
   // 공격 기술: { P가 쓴 기술(대상은 공격자): 방어 성공 여부 }
